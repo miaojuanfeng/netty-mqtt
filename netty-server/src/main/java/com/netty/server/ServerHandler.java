@@ -17,94 +17,24 @@ public class ServerHandler extends SimpleChannelInboundHandler<MqttMessage> {
         System.out.println("Client said:" + mqttMessage);
         switch (mqttMessage.fixedHeader().messageType()){
             case CONNECT:
-                MqttMessageService.replyConnectMessage(ctx, mqttMessage);
+                MqttMessageService.replyConnectMessage(ctx, (MqttConnectMessage) mqttMessage);
+                break;
+            case DISCONNECT:
+                MqttMessageService.replyDisConnectMessage(ctx);
                 break;
             case PINGREQ:
                 MqttMessageService.replyPingReqMessage(ctx);
                 break;
             case PUBLISH:
-                MqttPublishMessage msg = (MqttPublishMessage)mqttMessage;
-                ByteBuf byteBuffer = msg.payload();
-                byte[] bytes = new byte[byteBuffer.readableBytes()];
-                byteBuffer.readBytes(bytes);
-                String content = new String(bytes, "utf-8");
-                System.out.println("publish name: "+msg.variableHeader().topicName());
-                System.out.println("publish content: "+content);
-                switch (msg.fixedHeader().qosLevel()){
-                    case AT_MOST_ONCE:
-                        break;
-                    case AT_LEAST_ONCE:
-                        MqttFixedHeader mqttFixedHeader2 = new MqttFixedHeader(MqttMessageType.PUBACK,false, MqttQoS.AT_MOST_ONCE,false,0x02);
-                        int messageId = msg.variableHeader().messageId();
-                        MqttMessageIdVariableHeader from = MqttMessageIdVariableHeader.from(messageId);
-                        MqttPubAckMessage mqttPubAckMessage = new MqttPubAckMessage(mqttFixedHeader2,from);
-                        ctx.writeAndFlush(mqttPubAckMessage).addListener(new ChannelFutureListener() {
-                            @Override
-                            public void operationComplete(ChannelFuture future) throws Exception {
-                                if (future.isSuccess()) {
-                                    System.out.println("回写成功");
-                                } else {
-                                    System.out.println("回写失败");
-                                }
-                            }
-                        });
-                        break;
-                    case EXACTLY_ONCE:
-                        MqttFixedHeader mqttFixedHeader3 = new MqttFixedHeader(MqttMessageType.PUBREC,false, MqttQoS.AT_LEAST_ONCE,false,0x02);
-                        int messageId2 = msg.variableHeader().messageId();
-                        MqttMessageIdVariableHeader from2 = MqttMessageIdVariableHeader.from(messageId2);
-                        MqttPubAckMessage mqttPubAckMessage2 = new MqttPubAckMessage(mqttFixedHeader3,from2);
-                        ctx.writeAndFlush(mqttPubAckMessage2).addListener(new ChannelFutureListener() {
-                            @Override
-                            public void operationComplete(ChannelFuture future) throws Exception {
-                                if (future.isSuccess()) {
-                                    System.out.println("回写成功");
-                                } else {
-                                    System.out.println("回写失败");
-                                }
-                            }
-                        });
-                        break;
-                }
+                MqttMessageService.replyPublishMessage(ctx, (MqttPublishMessage) mqttMessage);
                 break;
             case PUBREL:
-                MqttMessageIdVariableHeader msg2 = (MqttMessageIdVariableHeader)mqttMessage.variableHeader();
-                MqttFixedHeader mqttFixedHeader4 = new MqttFixedHeader(MqttMessageType.PUBCOMP,false, MqttQoS.AT_MOST_ONCE,false,0x02);
-                int messageId4 = msg2.messageId();
-                MqttMessageIdVariableHeader from4 = MqttMessageIdVariableHeader.from(messageId4);
-                MqttPubAckMessage mqttPubAckMessage4 = new MqttPubAckMessage(mqttFixedHeader4,from4);
-                ctx.writeAndFlush(mqttPubAckMessage4).addListener(new ChannelFutureListener() {
-                    @Override
-                    public void operationComplete(ChannelFuture future) throws Exception {
-                        if (future.isSuccess()) {
-                            System.out.println("回写成功");
-                        } else {
-                            System.out.println("回写失败");
-                        }
-                    }
-                });
+                MqttMessageService.replyPubRelMessage(ctx, mqttMessage);
+                break;
+            case SUBSCRIBE:
+                MqttMessageService.replySubscribeMessage(ctx, (MqttSubscribeMessage) mqttMessage);
                 break;
         }
-//        ByteBuf result = (ByteBuf) msg;
-//        byte[] result1 = new byte[result.readableBytes()];
-//        result.readBytes(result1);
-//        String resultStr = new String(result1);
-//        System.out.println("Client said:" + resultStr);
-//
-//        String x = "接收到客户端消息：" + resultStr;
-//        ByteBuf firstMessage = Unpooled.buffer();
-//        firstMessage.writeBytes(x.getBytes());
-//
-//        ctx.writeAndFlush("OkOK").addListener(new ChannelFutureListener() {
-//                    @Override
-//                    public void operationComplete(ChannelFuture future) throws Exception {
-//                        if (future.isSuccess()) {
-//                            System.out.println("回写成功");
-//                        } else {
-//                            System.out.println("回写失败");
-//                        }
-//                    }
-//                });
     }
 
     @Override
