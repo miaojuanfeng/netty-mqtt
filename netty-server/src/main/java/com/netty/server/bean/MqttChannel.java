@@ -2,6 +2,8 @@ package com.netty.server.bean;
 
 import io.netty.channel.ChannelHandlerContext;
 
+import java.util.Date;
+
 public class MqttChannel {
 
     private String deviceId;
@@ -9,6 +11,10 @@ public class MqttChannel {
     private ChannelHandlerContext ctx;
 
     private MqttWill mqttWill;
+
+    private int keepAlive;
+
+    private long activeTime;
 
     public String getDeviceId() {
         return deviceId;
@@ -32,5 +38,21 @@ public class MqttChannel {
 
     public void setMqttWill(MqttWill mqttWill) {
         this.mqttWill = mqttWill;
+    }
+
+    public int getKeepAlive() {
+        return keepAlive;
+    }
+
+    public void setKeepAlive(int keepAlive) {
+        this.keepAlive = keepAlive;
+    }
+
+    public long getActiveTime() {
+        return activeTime;
+    }
+
+    public void setActiveTime(long activeTime) {
+        this.activeTime = activeTime;
     }
 }

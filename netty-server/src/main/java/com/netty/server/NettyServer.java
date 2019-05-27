@@ -1,5 +1,6 @@
 package com.netty.server;
 
+import com.netty.server.thread.AliveThread;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelOption;
@@ -21,6 +22,9 @@ public class NettyServer {
                     .option(ChannelOption.SO_BACKLOG, 128)
                     .childOption(ChannelOption.TCP_NODELAY, true)
                     .childOption(ChannelOption.SO_KEEPALIVE, true);
+
+            AliveThread aliveThread = new AliveThread();
+            aliveThread.start();
 
             ChannelFuture channelFuture = serverBootstrap.bind(8088).sync();
 

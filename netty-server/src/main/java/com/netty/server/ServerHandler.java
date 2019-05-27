@@ -15,6 +15,14 @@ public class ServerHandler extends SimpleChannelInboundHandler<MqttMessage> {
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, MqttMessage mqttMessage) throws Exception {
         System.out.println("Client said:" + mqttMessage);
+        /**
+         * 客户端到服务端的网络连接建立后，客户端发送给服务端的第一个报文必须是CONNECT报文
+         * 否则断开与该客户端的链接
+         */
+        if( !mqttMessage.fixedHeader().messageType().equals(MqttMessageType.CONNECT) && !MqttMessageService.checkLogin(ctx) ){
+            ctx.channel().close();
+            return;
+        }
         switch (mqttMessage.fixedHeader().messageType()){
             case CONNECT:
                 MqttMessageService.replyConnectMessage(ctx, (MqttConnectMessage) mqttMessage);

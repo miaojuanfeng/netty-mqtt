@@ -15,13 +15,12 @@ import io.netty.util.AttributeKey;
 import io.netty.util.IllegalReferenceCountException;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class MqttMessageService {
+
+    private static final AttributeKey<Boolean> _login = AttributeKey.valueOf("login");
 
     private static final AttributeKey<String> _deviceId = AttributeKey.valueOf("deviceId");
 
@@ -44,7 +43,7 @@ public class MqttMessageService {
         Channel channel = ctx.channel();
         /**
          * 这里还要看下协议英文原文
-         * Mqtt协议规定，在一个网络连接上，客户端只能发送一次CONNECT报文。如果收到第二次报文，需要将之前的链接断开
+         * Mqtt协议规定，相同Client ID客户端已连接到服务器，先前客户端必须断开连接后，服务器才能完成新的客户端CONNECT连接
          */
         String deviceId = mqttConnectMessage.payload().clientIdentifier();
 //        System.out.println(deviceId);
@@ -63,6 +62,8 @@ public class MqttMessageService {
         MqttChannel mqttChannel = new MqttChannel();
         mqttChannel.setDeviceId(deviceId);
         mqttChannel.setCtx(ctx);
+        mqttChannel.setKeepAlive(mqttConnectMessage.variableHeader().keepAliveTimeSeconds());
+        mqttChannel.setActiveTime(new Date().getTime());
         /**
          * 客户端开启了遗愿消息
          */
@@ -74,6 +75,7 @@ public class MqttMessageService {
             mqttWill.setRetain(mqttConnectMessage.variableHeader().isWillRetain());
             mqttChannel.setMqttWill(mqttWill);
         }
+        channel.attr(_login).set(true);
         channel.attr(_deviceId).set(deviceId);
         channels.put(deviceId, mqttChannel);
 
@@ -119,6 +121,8 @@ public class MqttMessageService {
     public static void replyDisConnectMessage(ChannelHandlerContext ctx){
         Channel channel = ctx.channel();
         String deviceId = channel.attr(_deviceId).get();
+        MqttChannel mqttChannel = channels.get(deviceId);
+        mqttChannel.getCtx().channel().close();
         channels.remove(deviceId);
     }
 
@@ -210,6 +214,28 @@ public class MqttMessageService {
 //        MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.DISCONNECT, mqttConnectMessage.fixedHeader().isDup(), MqttQoS.AT_MOST_ONCE, mqttConnectMessage.fixedHeader().isRetain(), 0x02);
 //        MqttMessage mqttMessage = new MqttMessage(mqttFixedHeader);
 //        writeAndFlush(ctx, mqttMessage);
+    }
+
+    public static Boolean checkLogin(ChannelHandlerContext ctx){
+        if( !ctx.channel().hasAttr(_login) ) {
+            return false;
+        }
+        return ctx.channel().attr(_login).get();
+    }
+
+    public static void checkAlive(){
+        for (String deviceId: channels.keySet()) {
+            MqttChannel mqttChannel = channels.get(deviceId);
+            if( checkOvertime(mqttChannel.getActiveTime(), mqttChannel.getKeepAlive()) ){
+                // 在1.5个心跳周期内没有收到心跳包，则断开与客户端的链接
+                
+            }
+        }
+    }
+
+    private static boolean checkOvertime(long activeTime, long keepAlive) {
+        System.out.println(System.currentTimeMillis()-activeTime);
+        return System.currentTimeMillis()-activeTime>=keepAlive*1.5*1000;
     }
 
     private static void pushPublishTopic(ChannelHandlerContext ctx, MqttPublishMessage mqttPublishMessage){
