@@ -4,6 +4,7 @@ import com.netty.server.bean.MqttChannel;
 import com.netty.server.bean.MqttSendMessage;
 import com.netty.server.bean.MqttTopic;
 import com.netty.server.bean.MqttWill;
+import com.netty.server.constant.MqttMessageStateConst;
 import com.netty.server.util.MessageId;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -107,21 +108,40 @@ public class MqttMessageService {
 //        System.out.println("publish name: "+mqttPublishMessage.variableHeader().topicName());
 //        System.out.println("publish content: "+content);
         MqttQoS qosLevel = mqttPublishMessage.fixedHeader().qosLevel();
+        ByteBuf b = mqttPublishMessage.payload();
+        byte[] payload = new byte[b.readableBytes()];
+        b.readBytes(payload);
         switch (qosLevel){
             case AT_MOST_ONCE:
                 pushPublishTopic(ctx, mqttPublishMessage);
                 break;
             case AT_LEAST_ONCE:
+//                saveMessage(ctx,
+//                        mqttPublishMessage.variableHeader().messageId(),
+//                        mqttPublishMessage.variableHeader().topicName(),
+//                        payload,
+//                        qosLevel,
+//                        MqttMessageStateConst.PUB);
                 sendPubAckMessage(ctx, mqttPublishMessage);
+                pushPublishTopic(ctx, mqttPublishMessage);
                 break;
             case EXACTLY_ONCE:
+                saveMessage(ctx,
+                        mqttPublishMessage.variableHeader().messageId(),
+                        mqttPublishMessage.variableHeader().topicName(),
+                        payload,
+                        qosLevel,
+                        MqttMessageStateConst.PUB);
                 sendPubRecMessage(ctx, mqttPublishMessage);
                 break;
         }
     }
 
     public static void replyPubRelMessage(ChannelHandlerContext ctx, MqttMessage mqttMessage){
-        sendPubCompMessage(ctx, mqttMessage);
+        MqttPublishMessage mqttPublishMessage = (MqttPublishMessage)mqttMessage;
+        updateMessage(mqttPublishMessage.variableHeader().messageId(), MqttMessageStateConst.COMP);
+        sendPubCompMessage(ctx, mqttPublishMessage);
+        pushPublishTopic(ctx,  mqttPublishMessage);
     }
 
     public static void replyDisConnectMessage(ChannelHandlerContext ctx){
@@ -233,6 +253,28 @@ public class MqttMessageService {
                 System.out.println("Info：客户端（"+mqttChannel.getDeviceId()+"）心跳超时，强制断开链接");
                 forceClose(mqttChannel.getCtx());
             }
+        }
+    }
+
+    private static void saveMessage(ChannelHandlerContext ctx, int messageId, String topicName, byte[] payload, MqttQoS mqttQoS, int state){
+        MqttSendMessage mqttSendMessage = new MqttSendMessage();
+        mqttSendMessage.setMessageId(messageId);
+        mqttSendMessage.setTopicName(topicName);
+        mqttSendMessage.setPayload(payload);
+        mqttSendMessage.setMqttQoS(mqttQoS);
+        mqttSendMessage.setState(state);
+        mqttSendMessage.setCtx(ctx);
+        mqttSendMessage.setSendTime(new Date().getTime());
+        messages.put(messageId, mqttSendMessage);
+    }
+
+    private static void updateMessage(int messageId, int state){
+        MqttSendMessage mqttSendMessage = messages.get(messageId);
+        if( mqttSendMessage != null ){
+            mqttSendMessage.setState(state);
+            mqttSendMessage.setSendTime(new Date().getTime());
+        }else{
+            System.out.println("Error：找不到对应的message");
         }
     }
 

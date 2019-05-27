@@ -15,7 +15,7 @@ public class MqttSendMessage {
 
     private MqttQoS mqttQoS;
 
-    private MqttMessageStateConst state;
+    private int state;
 
     private ChannelHandlerContext ctx;
 
@@ -53,11 +53,11 @@ public class MqttSendMessage {
         this.mqttQoS = mqttQoS;
     }
 
-    public MqttMessageStateConst getState() {
+    public int getState() {
         return state;
     }
 
-    public void setState(MqttMessageStateConst state) {
+    public void setState(int state) {
         this.state = state;
     }
 
