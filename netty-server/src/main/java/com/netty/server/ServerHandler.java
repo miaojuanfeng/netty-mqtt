@@ -92,6 +92,7 @@ public class ServerHandler extends SimpleChannelInboundHandler<MqttMessage> {
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         System.out.println("捕获channel异常");
         MqttMessageService.sendWillMessage(ctx);
+        MqttMessageService.forceClose(ctx);
 //        super.exceptionCaught(ctx, cause);
     }
 

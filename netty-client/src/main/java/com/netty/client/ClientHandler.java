@@ -32,7 +32,7 @@ public class ClientHandler extends SimpleChannelInboundHandler<Object> {
     public void channelActive(ChannelHandlerContext ctx) throws Exception {
         System.out.println("【ClientHandler：channelActive】"+ctx.channel().remoteAddress().toString()+"链接成功");
         MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.CONNECT,false, MqttQoS.AT_LEAST_ONCE,false,0);
-        MqttConnectVariableHeader mqttConnectVariableHeader = new MqttConnectVariableHeader(MqttVersion.MQTT_3_1_1.protocolName(),MqttVersion.MQTT_3_1_1.protocolLevel(),false,false,false,0,false,false,60);
+        MqttConnectVariableHeader mqttConnectVariableHeader = new MqttConnectVariableHeader(MqttVersion.MQTT_3_1_1.protocolName(),MqttVersion.MQTT_3_1_1.protocolLevel(),false,false,false,0,false,false,10);
         MqttConnectPayload mqttConnectPayload = new MqttConnectPayload("MQTT_FX_Client","aaa","sd".getBytes(),"root","123456".getBytes());
         MqttConnectMessage mqttSubscribeMessage = new MqttConnectMessage(mqttFixedHeader,mqttConnectVariableHeader,mqttConnectPayload);
         ctx.writeAndFlush(mqttSubscribeMessage);

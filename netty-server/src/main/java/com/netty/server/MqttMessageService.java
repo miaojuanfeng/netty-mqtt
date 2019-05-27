@@ -1,6 +1,7 @@
 package com.netty.server;
 
 import com.netty.server.bean.MqttChannel;
+import com.netty.server.bean.MqttSendMessage;
 import com.netty.server.bean.MqttTopic;
 import com.netty.server.bean.MqttWill;
 import com.netty.server.util.MessageId;
@@ -38,6 +39,11 @@ public class MqttMessageService {
 //     * 遗愿清单
 //     */
 //    private static ConcurrentHashMap<String, MqttWill> wills = new ConcurrentHashMap<>();
+
+    /**
+     * 未完成的消息
+     */
+    private static ConcurrentHashMap<Integer, MqttSendMessage> messages = new ConcurrentHashMap<>();
 
     public static void replyConnectMessage(ChannelHandlerContext ctx, MqttConnectMessage mqttConnectMessage){
         Channel channel = ctx.channel();
@@ -119,11 +125,7 @@ public class MqttMessageService {
     }
 
     public static void replyDisConnectMessage(ChannelHandlerContext ctx){
-        Channel channel = ctx.channel();
-        String deviceId = channel.attr(_deviceId).get();
-        MqttChannel mqttChannel = channels.get(deviceId);
-        mqttChannel.getCtx().channel().close();
-        channels.remove(deviceId);
+        forceClose(ctx);
     }
 
     public static void sendPubAckMessage(ChannelHandlerContext ctx, MqttPublishMessage mqttPublishMessage){
@@ -228,7 +230,8 @@ public class MqttMessageService {
             MqttChannel mqttChannel = channels.get(deviceId);
             if( checkOvertime(mqttChannel.getActiveTime(), mqttChannel.getKeepAlive()) ){
                 // 在1.5个心跳周期内没有收到心跳包，则断开与客户端的链接
-                
+                System.out.println("Info：客户端（"+mqttChannel.getDeviceId()+"）心跳超时，强制断开链接");
+                forceClose(mqttChannel.getCtx());
             }
         }
     }
@@ -236,6 +239,14 @@ public class MqttMessageService {
     private static boolean checkOvertime(long activeTime, long keepAlive) {
         System.out.println(System.currentTimeMillis()-activeTime);
         return System.currentTimeMillis()-activeTime>=keepAlive*1.5*1000;
+    }
+
+    public static void forceClose(ChannelHandlerContext ctx){
+        Channel channel = ctx.channel();
+        String deviceId = channel.attr(_deviceId).get();
+        MqttChannel mqttChannel = channels.get(deviceId);
+        mqttChannel.getCtx().channel().close();
+        channels.remove(deviceId);
     }
 
     private static void pushPublishTopic(ChannelHandlerContext ctx, MqttPublishMessage mqttPublishMessage){
