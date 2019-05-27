@@ -1,6 +1,8 @@
 package com.netty.server;
 
+import com.netty.server.bean.MqttChannel;
 import com.netty.server.bean.MqttTopic;
+import com.netty.server.bean.MqttWill;
 import com.netty.server.util.MessageId;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -23,27 +25,57 @@ public class MqttMessageService {
 
     private static final AttributeKey<String> _deviceId = AttributeKey.valueOf("deviceId");
 
-    private static ConcurrentHashMap<String, Channel> channels = new ConcurrentHashMap<>();
+    /**
+     * 已连接到服务器端的通道
+     */
+    private static ConcurrentHashMap<String, MqttChannel> channels = new ConcurrentHashMap<>();
 
+    /**
+     * 所有主题列表，以及所有订阅该主题的通道
+     */
     private static ConcurrentHashMap<String, Set<MqttTopic>> topics = new ConcurrentHashMap<>();
+
+//    /**
+//     * 遗愿清单
+//     */
+//    private static ConcurrentHashMap<String, MqttWill> wills = new ConcurrentHashMap<>();
 
     public static void replyConnectMessage(ChannelHandlerContext ctx, MqttConnectMessage mqttConnectMessage){
         Channel channel = ctx.channel();
         /**
-         * Mqtt协议规定，在一个网络连接上，客户端只能发送一次CONNECT报文。服务端必须将客户端发送的第二个CONNECT报文当作协议违规处理并断开客户端的连接
+         * 这里还要看下协议英文原文
+         * Mqtt协议规定，在一个网络连接上，客户端只能发送一次CONNECT报文。如果收到第二次报文，需要将之前的链接断开
          */
         String deviceId = mqttConnectMessage.payload().clientIdentifier();
-        System.out.println(deviceId);
-        Channel existChannel = channels.get(deviceId);
+//        System.out.println(deviceId);
+        /**
+         * 检查是否有重复连接的客户端
+         */
+        MqttChannel existChannel = channels.get(deviceId);
         if( existChannel != null ){
             System.out.println("exist channel");
-            sendDisConnectMessage(ctx, mqttConnectMessage);
-            channel.close();
-            return;
+            sendDisConnectMessage(existChannel.getCtx(), mqttConnectMessage);
+            existChannel.getCtx().channel().close();
+        }
+        /**
+         * 创建一个新的客户端实例
+         */
+        MqttChannel mqttChannel = new MqttChannel();
+        mqttChannel.setDeviceId(deviceId);
+        mqttChannel.setCtx(ctx);
+        /**
+         * 客户端开启了遗愿消息
+         */
+        if( mqttConnectMessage.variableHeader().isWillFlag() ){
+            MqttWill mqttWill = new MqttWill();
+            mqttWill.setWillTopic(mqttConnectMessage.payload().willTopic());
+            mqttWill.setWillMessage(mqttConnectMessage.payload().willMessageInBytes());
+            mqttWill.setMqttQoS(MqttQoS.valueOf(mqttConnectMessage.variableHeader().willQos()));
+            mqttWill.setRetain(mqttConnectMessage.variableHeader().isWillRetain());
+            mqttChannel.setMqttWill(mqttWill);
         }
         channel.attr(_deviceId).set(deviceId);
-        channels.put(deviceId, channel);
-
+        channels.put(deviceId, mqttChannel);
 
 //        System.out.println(channel.attr(_deviceId).get());
 
@@ -143,6 +175,41 @@ public class MqttMessageService {
         MqttSubAckPayload payload = new MqttSubAckPayload(grantedQoSLevels);
         MqttSubAckMessage mqttSubAckMessage = new MqttSubAckMessage(mqttFixedHeader, variableHeader, payload);
         writeAndFlush(ctx, mqttSubAckMessage);
+    }
+
+    public static void sendWillMessage(ChannelHandlerContext ctx){
+        String deviceId = ctx.channel().attr(_deviceId).get();
+        MqttChannel mqttChannel = channels.get(deviceId);
+        if( mqttChannel != null ){
+            MqttWill mqttWill = mqttChannel.getMqttWill();
+            if( mqttWill != null ){
+                String willTopic = mqttWill.getWillTopic();
+                byte[] willMessage = mqttWill.getWillMessage();
+                MqttQoS mqttQoS = mqttWill.getMqttQoS();
+                Set<MqttTopic> mqttTopics = topics.get(willTopic);
+                for (MqttTopic mqttTopic : mqttTopics){
+                    switch (mqttWill.getMqttQoS()){
+                        case AT_MOST_ONCE:
+                            sendTopicMessage(mqttTopic.getCtx(), mqttWill.getWillTopic(), mqttWill.getWillMessage(), MessageId.messageId(), mqttWill.getMqttQoS());
+                            break;
+                        case AT_LEAST_ONCE:
+                            // 先不实现
+                            break;
+                        case EXACTLY_ONCE:
+                            // 先不实现
+                            break;
+                    }
+                }
+            }else{
+                System.out.println("Info: MqttWill 未设置");
+            }
+        }else{
+            System.out.println("Error: MqttChannel 不存在");
+        }
+
+//        MqttFixedHeader mqttFixedHeader = new MqttFixedHeader(MqttMessageType.DISCONNECT, mqttConnectMessage.fixedHeader().isDup(), MqttQoS.AT_MOST_ONCE, mqttConnectMessage.fixedHeader().isRetain(), 0x02);
+//        MqttMessage mqttMessage = new MqttMessage(mqttFixedHeader);
+//        writeAndFlush(ctx, mqttMessage);
     }
 
     private static void pushPublishTopic(ChannelHandlerContext ctx, MqttPublishMessage mqttPublishMessage){

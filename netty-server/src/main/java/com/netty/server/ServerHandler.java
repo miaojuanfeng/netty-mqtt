@@ -83,7 +83,8 @@ public class ServerHandler extends SimpleChannelInboundHandler<MqttMessage> {
     //channel发生异常，若不关闭，随着异常channel的逐渐增多，性能也就随之下降
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         System.out.println("捕获channel异常");
-        super.exceptionCaught(ctx, cause);
+        MqttMessageService.sendWillMessage(ctx);
+//        super.exceptionCaught(ctx, cause);
     }
 
     @Override
